@@ -34,8 +34,8 @@ func main() {
 	var vm vmConfig
 
 	cmd := &cobra.Command{
-		Use:   "ee [kernel] [initrd] [\"kernel string\"]",
-		Short: "Used to remotely boot OS instances",
+		Use:   "dockerVM <flags>",
+		Short: "This will take an existing VMware template (RHEL/CentOS (today)), update and prepare it for Docker-CE",
 		Run: func(cmd *cobra.Command, args []string) {
 			if *vm.vCenterURL == "" || *vm.dcName == "" || *vm.dsName == "" || *vm.template == "" || *vm.vSphereHost == "" {
 				cmd.Usage()
@@ -68,8 +68,10 @@ func main() {
 			if err != nil {
 				log.Fatalf("%v", err)
 			}
+			watchPid(ctx, client, newVM, auth, []int64{pid})
+
 			// Update everything other than the VMware tools as this will interrupt the upgrade process
-			pid, err = vmExec(ctx, client, newVM, auth, "/usr/bin/nohup", " /bin/yum upgrade --exclude=open-vm-tools -y > /tmp/ee-yum-upgrade.log")
+			pid, err = vmExec(ctx, client, newVM, auth, "/bin/yum", "upgrade --exclude=open-vm-tools -y > /tmp/ce-yum-upgrade.log")
 			if err != nil {
 				log.Fatalf("%v", err)
 			}
@@ -80,13 +82,15 @@ func main() {
 			if err != nil {
 				log.Fatalf("%v", err)
 			}
+			watchPid(ctx, client, newVM, auth, []int64{pid})
 
 			pid, err = vmExec(ctx, client, newVM, auth, "/bin/yum", "remove docker docker-common docker-selinux docker-engine")
 			if err != nil {
 				log.Fatalf("%v", err)
 			}
+			watchPid(ctx, client, newVM, auth, []int64{pid})
 
-			pid, err = vmExec(ctx, client, newVM, auth, "/bin/yum", "install -y yum-utils device-mapper-persistent-data lvm2-y > /tmp/ee-docker-deps.log")
+			pid, err = vmExec(ctx, client, newVM, auth, "/bin/yum", "install -y yum-utils device-mapper-persistent-data lvm2 -y > /tmp/ce-docker-deps.log")
 			if err != nil {
 				log.Fatalf("%v", err)
 			}
@@ -96,18 +100,19 @@ func main() {
 			if err != nil {
 				log.Fatalf("%v", err)
 			}
+			watchPid(ctx, client, newVM, auth, []int64{pid})
 
 			pid, err = vmExec(ctx, client, newVM, auth, "/bin/yum", "-y makecache fast")
 			if err != nil {
 				log.Fatalf("%v", err)
 			}
+			watchPid(ctx, client, newVM, auth, []int64{pid})
 
-			pid, err = vmExec(ctx, client, newVM, auth, "/bin/yum", "-y install docker-ce > /tmp/ee-docker-install.log")
+			pid, err = vmExec(ctx, client, newVM, auth, "/bin/yum", "-y install docker-ce > /tmp/ce-docker-install.log")
 			if err != nil {
 				log.Fatalf("%v", err)
 			}
 			watchPid(ctx, client, newVM, auth, []int64{pid})
-
 		},
 	}
 
@@ -283,6 +288,9 @@ func vmExec(ctx context.Context, client *govmomi.Client, vm *object.VirtualMachi
 
 func watchPid(ctx context.Context, client *govmomi.Client, vm *object.VirtualMachine, auth *types.NamePasswordAuthentication, pid []int64) error {
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	o := guest.NewOperationsManager(client.Client, vm.Reference())
 	pm, _ := o.ProcessManager(ctx)
 
@@ -290,28 +298,46 @@ func watchPid(ctx context.Context, client *govmomi.Client, vm *object.VirtualMac
 	if err != nil {
 		return err
 	}
+	if len(process) > 0 {
+		log.Printf("Watching process [%d] cmd [%s]\n", process[0].Pid, process[0].CmdLine)
+	} else {
+		log.Fatalf("Process couldn't be found running")
+	}
 
-	log.Printf("Watching process [%d] cmd [%s]\n", process[0].Pid, process[0].CmdLine)
+	// Counter if VMtools loses a previously watched process
 	processTimeout := 0
+
 	for {
 		time.Sleep(5 * time.Second)
+
+		//o := guest.NewOperationsManager(client.Client, vm.Reference())
+		//pm, _ := o.ProcessManager(ctx)
 		process, err = pm.ListProcesses(ctx, auth, pid)
 
 		if err != nil {
 			return err
 		}
+		// Watch Process
+		if process[0].EndTime == nil {
+			fmt.Printf(".")
+		} else {
+			if process[0].ExitCode != 0 {
+				fmt.Printf("\n")
+				log.Println("Return code was not zero, please investigate logs on the Virtual Machine")
+				break
+			} else {
+				fmt.Printf("\n")
+				log.Println("Process completed Successfully")
+				return nil
+			}
+		}
+		// Process, now can't be found...
 		if len(process) == 0 {
 			fmt.Printf("x")
 			processTimeout++
 			if processTimeout == 12 { // 12x5 seconds == 60 second time out
-				fmt.Println("Can no longer track process, VMware Tools may have been restarted")
-				break
-			}
-		} else if process[0].EndTime == nil {
-			fmt.Printf(".")
-		} else {
-			if process[0].ExitCode != 0 {
-				log.Println("Return code was not zero, please investigate logs on the Virtual Machine")
+				fmt.Printf("\n")
+				log.Println("Process no longer watched, VMware Tools may have been restarted")
 				break
 			}
 		}
