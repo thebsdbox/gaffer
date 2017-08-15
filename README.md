@@ -1,7 +1,7 @@
 # dockerVM
 
-A tiny PoC to ok at automating the process of taking pre-existing VMware templates, attempting to bring them to a standard that
-will allow the deployment of Docker (CE Currently).
+A tiny PoC to look at automating the process of taking pre-existing VMware templates, attempting to bring them to a standard 
+that will allow the deployment of Docker (CE Currently).
 
 ## Building
 Clone the repository and then:
