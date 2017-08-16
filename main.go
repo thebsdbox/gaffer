@@ -34,12 +34,18 @@ func main() {
 	var vm vmConfig
 
 	cmd := &cobra.Command{
-		Use:   "dockerVM <flags>",
+		Use:   "dockerVM <flags> deployment.json",
 		Short: "This will take an existing VMware template (RHEL/CentOS (today)), update and prepare it for Docker-CE",
 		Run: func(cmd *cobra.Command, args []string) {
-			if *vm.vCenterURL == "" || *vm.dcName == "" || *vm.dsName == "" || *vm.template == "" || *vm.vSphereHost == "" {
+			if *vm.vCenterURL == "" || *vm.dcName == "" || *vm.dsName == "" || *vm.template == "" || *vm.vSphereHost == "" || len(args) != 1 {
 				cmd.Usage()
 				os.Exit(1)
+			}
+
+			// Use the only argument
+			err := OpenFile(args[0])
+			if err != nil {
+				log.Fatalf("%v", err)
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -63,56 +69,7 @@ func main() {
 				Password: *vm.vmTemplateAuth.password,
 			}
 
-			// There have been some bugs in older releases of RHEL/Centos, so this is disabled just for updates
-			pid, err := vmExec(ctx, client, newVM, auth, "/usr/sbin/setenforce", "0")
-			if err != nil {
-				log.Fatalf("%v", err)
-			}
-			watchPid(ctx, client, newVM, auth, []int64{pid})
-
-			// Update everything other than the VMware tools as this will interrupt the upgrade process
-			pid, err = vmExec(ctx, client, newVM, auth, "/bin/yum", "upgrade --exclude=open-vm-tools -y > /tmp/ce-yum-upgrade.log")
-			if err != nil {
-				log.Fatalf("%v", err)
-			}
-			watchPid(ctx, client, newVM, auth, []int64{pid})
-
-			// There have been some bugs in older releases of RHEL/Centos, this can be enabled after the uppdate.
-			pid, err = vmExec(ctx, client, newVM, auth, "/usr/sbin/setenforce", "1")
-			if err != nil {
-				log.Fatalf("%v", err)
-			}
-			watchPid(ctx, client, newVM, auth, []int64{pid})
-
-			pid, err = vmExec(ctx, client, newVM, auth, "/bin/yum", "remove docker docker-common docker-selinux docker-engine")
-			if err != nil {
-				log.Fatalf("%v", err)
-			}
-			watchPid(ctx, client, newVM, auth, []int64{pid})
-
-			pid, err = vmExec(ctx, client, newVM, auth, "/bin/yum", "install -y yum-utils device-mapper-persistent-data lvm2 -y > /tmp/ce-docker-deps.log")
-			if err != nil {
-				log.Fatalf("%v", err)
-			}
-			watchPid(ctx, client, newVM, auth, []int64{pid})
-
-			pid, err = vmExec(ctx, client, newVM, auth, "/usr/bin/yum-config-manager", "--add-repo https://download.docker.com/linux/centos/docker-ce.repo")
-			if err != nil {
-				log.Fatalf("%v", err)
-			}
-			watchPid(ctx, client, newVM, auth, []int64{pid})
-
-			pid, err = vmExec(ctx, client, newVM, auth, "/bin/yum", "-y makecache fast")
-			if err != nil {
-				log.Fatalf("%v", err)
-			}
-			watchPid(ctx, client, newVM, auth, []int64{pid})
-
-			pid, err = vmExec(ctx, client, newVM, auth, "/bin/yum", "-y install docker-ce > /tmp/ce-docker-install.log")
-			if err != nil {
-				log.Fatalf("%v", err)
-			}
-			watchPid(ctx, client, newVM, auth, []int64{pid})
+			runCommands(ctx, client, newVM, auth)
 		},
 	}
 
@@ -121,7 +78,7 @@ func main() {
 	vm.dsName = cmd.Flags().String("datastore", os.Getenv("VCDATASTORE"), "The name of the DataStore to host the VM [REQD]")
 	vm.networkName = cmd.Flags().String("network", os.Getenv("VCNETWORK"), "The network label the VM will use [REQD]")
 	vm.vSphereHost = cmd.Flags().String("hostname", os.Getenv("VCHOST"), "The server that will run the VM [REQD]")
-	vm.template = cmd.Flags().String("template", "", "The name of a template that be used for a new VM [REQD]")
+	vm.template = cmd.Flags().String("template", os.Getenv("VCTEMPLATE"), "The name of a template that be used for a new VM [REQD]")
 	vm.vmTemplateAuth.username = cmd.Flags().String("templateUser", os.Getenv("VMUSER"), "A created user inside of the VM template")
 	vm.vmTemplateAuth.password = cmd.Flags().String("templatePass", os.Getenv("VMPASS"), "The password for the specified user inside the VM template")
 	log.Println("Starting Docker VMware deployment")
@@ -270,6 +227,27 @@ func provision(ctx context.Context, client *govmomi.Client, vm vmConfig) (*objec
 	return clonedVM, nil
 }
 
+func runCommands(ctx context.Context, client *govmomi.Client, vm *object.VirtualMachine, auth *types.NamePasswordAuthentication) {
+	cmdCount := CommandCount()
+	for i := 0; i < cmdCount; i++ {
+		cmd := NextCommand()
+		// if cmd == nil then no more commands to run
+		if cmd != nil {
+			if cmd.CMDNote != "" { // If the command has a note, then print it out
+				log.Printf("Task: %s", cmd.CMDNote)
+			}
+			// Execute the command on the Virtual Machine
+			pid, err := vmExec(ctx, client, vm, auth, cmd.CMDPath, cmd.CMDArgs)
+			if err != nil {
+				log.Fatalf("%v", err)
+			}
+			if cmd.CMDWatch == true {
+				watchPid(ctx, client, vm, auth, []int64{pid})
+			}
+		}
+	}
+}
+
 func vmExec(ctx context.Context, client *govmomi.Client, vm *object.VirtualMachine, auth *types.NamePasswordAuthentication, path string, args string) (int64, error) {
 	o := guest.NewOperationsManager(client.Client, vm.Reference())
 	pm, _ := o.ProcessManager(ctx)
@@ -300,6 +278,7 @@ func watchPid(ctx context.Context, client *govmomi.Client, vm *object.VirtualMac
 	}
 	if len(process) > 0 {
 		log.Printf("Watching process [%d] cmd [%s]\n", process[0].Pid, process[0].CmdLine)
+		fmt.Printf(".")
 	} else {
 		log.Fatalf("Process couldn't be found running")
 	}
@@ -309,9 +288,6 @@ func watchPid(ctx context.Context, client *govmomi.Client, vm *object.VirtualMac
 
 	for {
 		time.Sleep(5 * time.Second)
-
-		//o := guest.NewOperationsManager(client.Client, vm.Reference())
-		//pm, _ := o.ProcessManager(ctx)
 		process, err = pm.ListProcesses(ctx, auth, pid)
 
 		if err != nil {
