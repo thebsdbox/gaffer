@@ -81,6 +81,7 @@ func main() {
 	vm.template = cmd.Flags().String("template", os.Getenv("VCTEMPLATE"), "The name of a template that be used for a new VM [REQD]")
 	vm.vmTemplateAuth.username = cmd.Flags().String("templateUser", os.Getenv("VMUSER"), "A created user inside of the VM template")
 	vm.vmTemplateAuth.password = cmd.Flags().String("templatePass", os.Getenv("VMPASS"), "The password for the specified user inside the VM template")
+
 	log.Println("Starting Docker VMware deployment")
 	err := cmd.Execute()
 	if err != nil {
@@ -262,6 +263,25 @@ func vmExec(ctx context.Context, client *govmomi.Client, vm *object.VirtualMachi
 		return 0, err
 	}
 	return pid, nil
+}
+
+// This will download a file from the Virtual Machine to the localhost
+func vmDownloadFile(ctx context.Context, client *govmomi.Client, vm *object.VirtualMachine, auth *types.NamePasswordAuthentication, path string, deleteonDownload bool) error {
+	o := guest.NewOperationsManager(client.Client, vm.Reference())
+	fm, _ := o.FileManager(ctx)
+	fileDetails, err := fm.InitiateFileTransferFromGuest(ctx, auth, path)
+	if err != nil {
+		return err
+	}
+	log.Printf("%d of file [%s] downloaded succesfully", fileDetails.Size, fileDetails.Url)
+	log.Printf("Removing file [%s] from Virtual Machine", path)
+	if deleteonDownload == true {
+		err = fm.DeleteFile(ctx, auth, path)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func watchPid(ctx context.Context, client *govmomi.Client, vm *object.VirtualMachine, auth *types.NamePasswordAuthentication, pid []int64) error {

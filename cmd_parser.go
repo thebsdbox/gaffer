@@ -16,10 +16,15 @@ type deploymentPlan struct {
 
 // DeploymentCommand - is passed to the vSphere API functions in order to be executed on a remote VM
 type DeploymentCommand struct {
-	CMDNote  string `json:"note"`
-	CMDPath  string `json:"path"`
-	CMDArgs  string `json:"args"`
-	CMDWatch bool   `json:"watch"`
+	CMDType string `json:"type"` //defines the type of command
+	CMDNote string `json:"note"` //defines a notice that the end user will recieve
+
+	CMDPath string `json:"path"` //path to either an executable or file to download
+
+	CMDDelete bool `json:"delAfterDownload"` //remove the file once downloaded
+
+	CMDArgs  string `json:"args"`  //arguments to pass to the executable
+	CMDWatch bool   `json:"watch"` //watch the pid to ensure it executes correctly
 }
 
 var plan *deploymentPlan

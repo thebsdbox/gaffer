@@ -1,0 +1,75 @@
+{
+    "label":"Docker-CE CentOS Deployment",
+    "version":"0.1",
+    "deployment": [
+        { "task": "template" },
+        { "task": "manager" }
+    ],
+    "template": {
+        "inputTemplate": "centos7_tmpl",
+        "outputTemplate": "new_CE_tmpl",
+        "import":"",
+        "commands": [
+            {
+                "note":"Disable SELINUX (Older CentOS bug)",
+                "path":"/usr/sbin/setenforce",
+                "args":"0",
+                "watch": true
+            },
+            {
+                "note":"Upgrade all packages (except VMware Tools)",            
+                "path":"/bin/yum",
+                "args":"upgrade --exclude=open-vm-tools -y > /tmp/ce-yum-upgrade.log",
+                "watch": true
+            },
+            {
+                "note":"Re-Enable SELINUX",
+                "path":"/usr/sbin/setenforce",
+                "args":"1",
+                "watch": true
+            },
+            {
+                "note":"Remove any pre-existing Docker Installation",            
+                "path":"/bin/yum",
+                "args":"remove docker docker-common docker-selinux docker-engine",
+                "watch": true
+            },
+            {
+                "note":"Install Docker-CE Supporting tools",            
+                "path":"/bin/yum",
+                "args":"install -y yum-utils device-mapper-persistent-data lvm2 -y > /tmp/ce-docker-deps.log",
+                "watch": true
+            },
+            {
+                "note":"Add Docker CE Repository",            
+                "path":"/usr/bin/yum-config-manager",
+                "args":"--add-repo https://download.docker.com/linux/centos/docker-ce.repo",
+                "watch": true
+            },
+            {
+                "note":"Update Yum Cache",            
+                "path":"/bin/yum",
+                "args":"-y makecache fast",
+                "watch": true
+            },
+            {
+                "note":"Installation of Docker-CE",            
+                "path":"/bin/yum",
+                "args":"-y install docker-ce > /tmp/ce-docker-install.log",
+                "watch": true
+            },
+            {
+                "note":"Enable Docker on Boot",            
+                "path":"/usr/bin/systemctl",
+                "args":"enable docker",
+                "watch": true
+            }
+        ]
+    },
+    "manager": {
+        "inputTemplate":"new_CE_tmpl",
+        "outputVM": "docker_ce_mgr01",
+        "import":"",
+        "commands": []
+    }
+}
