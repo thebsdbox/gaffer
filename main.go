@@ -14,8 +14,9 @@ import (
 	"github.com/vmware/govmomi/vim25/types"
 )
 
-
 func main() {
+	InitDeployment()
+	vm := VMwareConfig() //Pull VMware configuration from JSON
 
 	cmd := &cobra.Command{
 		Use:   "dockerVM <flags> deployment.json",
@@ -27,26 +28,31 @@ func main() {
 				log.Fatalf("%v", err)
 			}
 
+			if *vm.VCenterURL == "" || *vm.DCName == "" || *vm.DSName == "" || *vm.VSphereHost == "" || len(args) != 1 {
+				cmd.Usage()
+				os.Exit(1)
+			}
+
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			client, err := vCenterLogin(ctx, vm)
+			client, err := vCenterLogin(ctx, *vm)
 			if err != nil {
 				log.Fatalf("%v", err)
 			}
 
-			log.Printf("Building an updated Image with Docker-CE")
-			newVM, provisionError := provision(ctx, client, vm)
-
-			if provisionError != nil {
-				log.Printf("Provisioning has failed =>")
-				log.Fatalf("%v", provisionError)
-			}
-
-			auth := &types.NamePasswordAuthentication{
-			}
+			runTasks(ctx, client)
+			//runCommands
 		},
 	}
+	// Overlay from
+	vm.VCenterURL = cmd.Flags().String("vcurl", os.Getenv("VCURL"), "VMware vCenter URL, format https://user:pass@address/sdk [REQD]")
+	vm.DCName = cmd.Flags().String("datacenter", os.Getenv("VCDATACENTER"), "The name of the Datacenter to host the VM [REQD]")
+	vm.DSName = cmd.Flags().String("datastore", os.Getenv("VCDATASTORE"), "The name of the DataStore to host the VM [REQD]")
+	vm.NetworkName = cmd.Flags().String("network", os.Getenv("VCNETWORK"), "The network label the VM will use [REQD]")
+	vm.VSphereHost = cmd.Flags().String("hostname", os.Getenv("VCHOST"), "The server that will run the VM [REQD]")
+	vm.VMTemplateAuth.Username = cmd.Flags().String("templateUser", os.Getenv("VMUSER"), "A created user inside of the VM template")
+	vm.VMTemplateAuth.Password = cmd.Flags().String("templatePass", os.Getenv("VMPASS"), "The password for the specified user inside the VM template")
 
 	log.Println("Starting Docker VMware deployment")
 	err := cmd.Execute()
@@ -56,19 +62,66 @@ func main() {
 
 }
 
+func runTasks(ctx context.Context, client *govmomi.Client) {
+	taskCount := DeploymentCount()
+	vm := VMwareConfig() //Pull VMware configuration from JSON
+	for i := 0; i < taskCount; i++ {
+		task := NextDeployment()
+		log.Printf("Building an updated Image with Docker-CE")
+		newVM, err := provision(ctx, client, *vm, task.Task.InputTemplate, task.Task.OutputName)
 
-	}
+		if err != nil {
+			log.Printf("Provisioning has failed =>")
+			log.Fatalf("%v", err)
+		}
+		if task.Task.OutputType == "Template" {
+			err = newVM.ShutdownGuest(ctx)
+			if err != nil {
+				log.Printf("Provisioning has failed =>")
+				log.Fatalf("%v", err)
+			}
+			err = newVM.MarkAsTemplate(ctx)
+			if err != nil {
+				log.Printf("Provisioning has failed =>")
+				log.Fatalf("%v", err)
+			}
+		}
+		auth := &types.NamePasswordAuthentication{
+			Username: *vm.VMTemplateAuth.Username,
+			Password: *vm.VMTemplateAuth.Password,
+		}
 
+		if task != nil {
+			log.Printf("Beginning Task [%s]: %s", task.Name, task.Note)
+			runCommands(ctx, client, newVM, auth, task)
+		}
 	}
 }
 
+func runCommands(ctx context.Context, client *govmomi.Client, vm *object.VirtualMachine, auth *types.NamePasswordAuthentication, deployment *DeploymentTask) {
+	cmdCount := CommandCount(deployment)
+	log.Printf("%d commands will be executed.", cmdCount)
 	for i := 0; i < cmdCount; i++ {
+		cmd := NextCommand(deployment)
 		// if cmd == nil then no more commands to run
 		if cmd != nil {
 			if cmd.CMDNote != "" { // If the command has a note, then print it out
 				log.Printf("Task: %s", cmd.CMDNote)
 			}
+			switch cmd.CMDType {
+			case "execute":
+				pid, err := vmExec(ctx, client, vm, auth, cmd.CMDPath, cmd.CMDArgs)
+				if err != nil {
+					log.Fatalf("%v", err)
+				}
+				if cmd.CMDWatch == true {
+					watchPid(ctx, client, vm, auth, []int64{pid})
+				}
+			case "download":
+				vmDownloadFile(ctx, client, vm, auth, cmd.CMDPath, cmd.CMDDelete)
 			}
+			// Execute the command on the Virtual Machine
+
 		}
 	}
 }
