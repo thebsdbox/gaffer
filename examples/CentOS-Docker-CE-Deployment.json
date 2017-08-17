@@ -1,5 +1,5 @@
 {
-    "label":"Test",
+    "label":"Docker-CE-on-CentOS",
     "version":"0.1",
     "vmconfig" : {
         "datacentre" : "",
@@ -75,13 +75,6 @@
                     "path":"/bin/yum",
                     "args":"-y install docker-ce > /tmp/ce-docker-install.log",
                     "watch": true
-                },                
-                {
-                    "type":"execute",                    
-                    "note":"Set Storage Driver to devicemapper",            
-                    "path":"/usr/bin/echo",
-                    "args":"-en '{\n  \"storage-driver\": \"devicemapper\"\n}' > /etc/docker/daemon.json",
-                    "watch": true
                 },
                 {
                     "type":"execute",                    
@@ -92,30 +85,37 @@
                 },
                 {
                     "type":"execute",                    
-                    "note":"Start Docker to pre-download images",            
+                    "note":"Start Docker to pre-configure system",            
                     "path":"/usr/bin/systemctl",
                     "args":"start docker",
+                    "watch": true
+                },                
+                {
+                    "type":"execute",                    
+                    "note":"Set Storage Driver to devicemapper",            
+                    "path":"/usr/bin/echo",
+                    "args":"-en '{\n  \"storage-driver\": \"devicemapper\"\n}' > /etc/docker/daemon.json",
+                    "watch": true
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Restart Docker to pick up new storage Configuration",            
+                    "path":"/usr/bin/systemctl",
+                    "args":"restart docker",
                     "watch": true
                 },
                 {
                     "type":"execute",                    
                     "note":"Download UCP 2.2",            
                     "path":"/usr/bin/docker",
-                    "args":"pull docker/ucp:2.2.0",
+                    "args":"pull docker/ucp:2.2.0 >> /tmp/docker-pull.log",
                     "watch": true
                 },
                 {
                     "type":"execute",                    
                     "note":"Download DTR 2.2.7",            
                     "path":"/usr/bin/docker",
-                    "args":"pull docker/dtr:2.2.7",
-                    "watch": true
-                },
-                {
-                    "type":"execute",                    
-                    "note":"Shutting down Operating System",            
-                    "path":"/usr/sbin/shutdown",
-                    "args":"-h now",
+                    "args":"pull docker/dtr:2.2.7 >> /tmp/docker-pull.log",
                     "watch": true
                 }
             ]

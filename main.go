@@ -19,7 +19,7 @@ func main() {
 	vm := VMwareConfig() //Pull VMware configuration from JSON
 
 	cmd := &cobra.Command{
-		Use:   "dockerVM <flags> deployment.json",
+		Use:   "dockerVM deployment.json",
 		Short: "This will take an existing VMware template (RHEL/CentOS (today)), update and prepare it for Docker-CE",
 		Run: func(cmd *cobra.Command, args []string) {
 			// Use the only argument
@@ -67,33 +67,50 @@ func runTasks(ctx context.Context, client *govmomi.Client) {
 	vm := VMwareConfig() //Pull VMware configuration from JSON
 	for i := 0; i < taskCount; i++ {
 		task := NextDeployment()
-		log.Printf("Building an updated Image with Docker-CE")
-		newVM, err := provision(ctx, client, *vm, task.Task.InputTemplate, task.Task.OutputName)
-
-		if err != nil {
-			log.Printf("Provisioning has failed =>")
-			log.Fatalf("%v", err)
-		}
-		if task.Task.OutputType == "Template" {
-			err = newVM.ShutdownGuest(ctx)
-			if err != nil {
-				log.Printf("Provisioning has failed =>")
-				log.Fatalf("%v", err)
-			}
-			err = newVM.MarkAsTemplate(ctx)
-			if err != nil {
-				log.Printf("Provisioning has failed =>")
-				log.Fatalf("%v", err)
-			}
-		}
-		auth := &types.NamePasswordAuthentication{
-			Username: *vm.VMTemplateAuth.Username,
-			Password: *vm.VMTemplateAuth.Password,
-		}
 
 		if task != nil {
 			log.Printf("Beginning Task [%s]: %s", task.Name, task.Note)
+
+			newVM, err := provision(ctx, client, *vm, task.Task.InputTemplate, task.Task.OutputName)
+
+			if err != nil {
+				log.Printf("Provisioning has failed =>")
+				log.Fatalf("%v", err)
+			}
+
+			auth := &types.NamePasswordAuthentication{
+				Username: *vm.VMTemplateAuth.Username,
+				Password: *vm.VMTemplateAuth.Password,
+			}
+
 			runCommands(ctx, client, newVM, auth, task)
+			if task.Task.OutputType == "Template" {
+				log.Printf("Provisioning tasks have completed, powering down Virtual Machine (120 second Timeout)")
+
+				err = newVM.ShutdownGuest(ctx)
+				if err != nil {
+					log.Printf("Power Off task failed =>")
+					log.Fatalf("%v", err)
+				}
+				for i := 1; i <= 60; i++ {
+					state, err := newVM.PowerState(ctx)
+					if err != nil {
+						log.Fatalf("%v", err)
+					}
+					if state != types.VirtualMachinePowerStatePoweredOff {
+						fmt.Printf(".")
+					} else {
+						fmt.Printf("\n")
+						break
+					}
+					time.Sleep(2 * time.Second)
+				}
+				err = newVM.MarkAsTemplate(ctx)
+				if err != nil {
+					log.Printf("Marking as Template has failed =>")
+					log.Fatalf("%v", err)
+				}
+			}
 		}
 	}
 }
