@@ -1,0 +1,46 @@
+{
+    "label":"Docker-CE-on-CentOS",
+    "version":"0.1",
+    "vmconfig" : {
+        "datacentre" : "",
+        "datastore":"",
+        "network" : "",
+        "host" : "",
+        "guestCredentials" : {
+            "guestUser" : "",
+            "guestPass" :""
+        }
+    },
+    "deployment": [
+        {"name": "ucp",
+            "note": "Build new template for CentOS",
+            "task":{
+               "inputTemplate": "DockerTemplate",
+               "outputName": "ucp01",
+               "outputType": "VM",
+               "import":"",
+               "commands": [
+                   {
+                       "type":"execute",                    
+                       "note":"Initialise Docker Swarm",            
+                       "path":"/usr/bin/docker",
+                        "args":"swarm init",
+                        "watch": true
+                   },
+                   {
+                       "type":"execute",                    
+                       "note":"Backing up swarm key for other nodes",            
+                       "path":"/usr/bin/docker",
+                       "args":"swarm join-token worker | grep SWMTKN > /tmp/swm.tkn",
+                       "watch": true
+                   },
+                   {
+                       "type":"download",
+                       "path":"/tmp/swm.tkn",
+                       "delAfterDownload": true
+                   }
+                ]
+            }
+        }
+    ]
+}

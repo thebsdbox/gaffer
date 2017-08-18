@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"time"
+
+	"github.com/vmware/govmomi/vim25/soap"
 
 	"github.com/spf13/cobra"
 	"github.com/vmware/govmomi"
@@ -132,10 +135,16 @@ func runCommands(ctx context.Context, client *govmomi.Client, vm *object.Virtual
 					log.Fatalf("%v", err)
 				}
 				if cmd.CMDWatch == true {
-					watchPid(ctx, client, vm, auth, []int64{pid})
+					err = watchPid(ctx, client, vm, auth, []int64{pid})
+					if err != nil {
+						log.Fatalf("%v", err)
+					}
 				}
 			case "download":
-				vmDownloadFile(ctx, client, vm, auth, cmd.CMDPath, cmd.CMDDelete)
+				err := vmDownloadFile(ctx, client, vm, auth, cmd.CMDPath, cmd.CMDDelete)
+				if err != nil {
+					log.Fatalf("%v", err)
+				}
 			}
 			// Execute the command on the Virtual Machine
 
@@ -159,6 +168,18 @@ func vmExec(ctx context.Context, client *govmomi.Client, vm *object.VirtualMachi
 	return pid, nil
 }
 
+func readEnv(ctx context.Context, client *govmomi.Client, vm *object.VirtualMachine, auth *types.NamePasswordAuthentication, path string, args string) error {
+	o := guest.NewOperationsManager(client.Client, vm.Reference())
+	pm, _ := o.ProcessManager(ctx)
+
+	test, err := pm.ReadEnvironmentVariable(ctx, auth, []string{"swarm"})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s", test)
+	return nil
+}
+
 // This will download a file from the Virtual Machine to the localhost
 func vmDownloadFile(ctx context.Context, client *govmomi.Client, vm *object.VirtualMachine, auth *types.NamePasswordAuthentication, path string, deleteonDownload bool) error {
 	o := guest.NewOperationsManager(client.Client, vm.Reference())
@@ -167,6 +188,21 @@ func vmDownloadFile(ctx context.Context, client *govmomi.Client, vm *object.Virt
 	if err != nil {
 		return err
 	}
+
+	dl := soap.DefaultDownload
+
+	e, err := client.ParseURL(fileDetails.Url)
+	if err != nil {
+		return err
+	}
+
+	f, _, err := client.Download(e, &dl)
+	if err != nil {
+		return err
+	}
+	// This will change to allow us to store contents of the filesystem in memory
+	_, err = io.Copy(os.Stdout, f)
+
 	log.Printf("%d of file [%s] downloaded succesfully", fileDetails.Size, fileDetails.Url)
 	log.Printf("Removing file [%s] from Virtual Machine", path)
 	if deleteonDownload == true {
