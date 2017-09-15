@@ -47,12 +47,13 @@ type DeploymentCommand struct {
 	CMDType string `json:"type"` //defines the type of command
 	CMDNote string `json:"note"` //defines a notice that the end user will recieve
 
-	CMDPath string `json:"path"` //path to either an executable or file to download
+	CMDPath      string `json:"path"`             //path to either an executable or file to download
+	CMDkey       string `json:"execKey"`          //Execute a line stored in the map
+	CMDresultKey string `json:"resultKey"`        //Will add the contents of the file downloaded to a map under this key
+	CMDDelete    bool   `json:"delAfterDownload"` //remove the file once downloaded
 
-	CMDDelete bool `json:"delAfterDownload"` //remove the file once downloaded
-
-	CMDArgs  string `json:"args"`  //arguments to pass to the executable
-	CMDWatch bool   `json:"watch"` //watch the pid to ensure it executes correctly
+	CMDArgs   string `json:"args"`             //arguments to pass to the executable
+	CMDIgnore bool   `json:"ignore,omitempty"` //ignore the outcome of the task
 }
 
 var plan *deploymentPlan
@@ -105,6 +106,7 @@ func DeploymentCount() int {
 
 //NextCommand - This will return the Command Path, the Arguments or an error
 func NextCommand(deployment *DeploymentTask) *DeploymentCommand {
+
 	if commandCounter > len(deployment.Task.Commands) {
 		commandCounter = 0 // reset counter for next set of commands
 		return nil
@@ -112,6 +114,11 @@ func NextCommand(deployment *DeploymentTask) *DeploymentCommand {
 
 	defer func() { commandCounter++ }()
 	return &deployment.Task.Commands[commandCounter]
+}
+
+// ResetCounter - resets the counter back to zero
+func ResetCounter() {
+	commandCounter = 0
 }
 
 // CommandCount - Returns the number of commands to be executed for use in a loop
