@@ -208,7 +208,6 @@ func runCommands(ctx context.Context, client *govmomi.Client, vm *object.Virtual
 				}
 			}
 			// Execute the command on the Virtual Machine
-
 		}
 	}
 	ResetCounter()
@@ -308,7 +307,7 @@ func watchPid(ctx context.Context, client *govmomi.Client, vm *object.VirtualMac
 		return err
 	}
 	if len(process) > 0 {
-		log.Printf("Watching process [%d] cmd [%s]\n", process[0].Pid, process[0].CmdLine)
+		log.Printf("Watching process [%d] cmd [%s]", process[0].Pid, process[0].CmdLine)
 		fmt.Printf(".")
 	} else {
 		log.Fatalf("Process couldn't be found running")
