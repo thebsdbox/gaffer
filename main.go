@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"time"
 
-	"github.com/vmware/govmomi/vim25/soap"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/spf13/cobra"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/guest"
 	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
 )
 
@@ -22,6 +22,14 @@ var cmdResults = map[string]string{}
 func main() {
 	InitDeployment()
 	vm := VMwareConfig() //Pull VMware configuration from JSON
+
+	vc := cmd.Flags().String("vcurl", os.Getenv("VCURL"), "VMware vCenter URL, format https://user:pass@address/sdk [REQD]")
+	dc := cmd.Flags().String("datacenter", os.Getenv("VCDATACENTER"), "The name of the Datacenter to host the VM [REQD]")
+	ds := cmd.Flags().String("datastore", os.Getenv("VCDATASTORE"), "The name of the DataStore to host the VM [REQD]")
+	nn := cmd.Flags().String("network", os.Getenv("VCNETWORK"), "The network label the VM will use [REQD]")
+	vh := cmd.Flags().String("hostname", os.Getenv("VCHOST"), "The server that will run the VM [REQD]")
+	gu := cmd.Flags().String("templateUser", os.Getenv("VMUSER"), "A created user inside of the VM template")
+	gp := cmd.Flags().String("templatePass", os.Getenv("VMPASS"), "The password for the specified user inside the VM template")
 
 	cmd := &cobra.Command{
 		Use:   "dockerVM deployment.json",
@@ -93,9 +101,9 @@ func main() {
 			if err != nil {
 				log.Fatalf("%v", err)
 			}
+			//runCommands
 
 			runTasks(ctx, client)
-			//runCommands
 		},
 	}
 
