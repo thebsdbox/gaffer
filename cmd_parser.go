@@ -3,8 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type deploymentPlan struct {
@@ -47,13 +48,14 @@ type DeploymentCommand struct {
 	CMDType string `json:"type"` //defines the type of command
 	CMDNote string `json:"note"` //defines a notice that the end user will recieve
 
-	CMDPath      string `json:"path"`             //path to either an executable or file to download
+	CMD          string `json:"cmd"`              //path to either an executable or file to download
+	CMDUser      string `json:"sudoUser"`         //Use sudo to execute the command
 	CMDkey       string `json:"execKey"`          //Execute a line stored in the map
 	CMDresultKey string `json:"resultKey"`        //Will add the contents of the file downloaded to a map under this key
-	CMDDelete    bool   `json:"delAfterDownload"` //remove the file once downloaded
+	CMDIgnore    bool   `json:"ignore,omitempty"` //ignore the outcome of the task
 
-	CMDArgs   string `json:"args"`             //arguments to pass to the executable
-	CMDIgnore bool   `json:"ignore,omitempty"` //ignore the outcome of the task
+	CMDFilePath string `json:"filePath"`         //Path to a file to download
+	CMDDelete   bool   `json:"delAfterDownload"` //remove the file once downloaded
 }
 
 var plan *deploymentPlan

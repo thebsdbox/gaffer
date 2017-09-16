@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/url"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"

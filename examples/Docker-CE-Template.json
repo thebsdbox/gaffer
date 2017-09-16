@@ -1,0 +1,147 @@
+{
+    "label":"Docker-CE-on-CentOS",
+    "version":"0.1",
+    "vmconfig" : {
+        "datacentre" : "",
+        "datastore":"",
+        "network" : "",
+        "host" : "",
+        "guestCredentials" : {
+            "guestUser" : "root",
+            "guestPass" :"password"
+        }
+    },
+    "deployment": [
+        {"name": "Docker Template",
+         "note": "Build new template for CentOS",
+         "task":{
+            "inputTemplate": "Centos7-Template",
+            "outputName": "DockerTemplate",
+            "outputType": "Template",
+            "import":"",
+            "commands": [
+                {
+                    "type":"execute",                    
+                    "note":"Disable SELINUX (Older CentOS bug)",
+                    "cmd":"/usr/sbin/setenforce 0",
+                    "sudoUser":"root"
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Upgrade all packages (except VMware Tools)",            
+                    "path":"/bin/yum upgrade --exclude=open-vm-tools -y > /tmp/ce-yum-upgrade.log",
+                    "sudoUser":"root"
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Remove any pre-existing Docker Installation",            
+                    "path":"/bin/yum remove docker docker-common docker-selinux docker-engine",
+                    "sudoUser":"root"
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Install Docker-CE Supporting tools",            
+                    "path":"/bin/yum install -y yum-utils device-mapper-persistent-data lvm2 -y > /tmp/ce-docker-deps.log",
+                    "sudoUser":"root"
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Add Docker CE Repository",            
+                    "path":"/usr/bin/yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo",
+                    "sudoUser":"root"
+                },
+                {            
+                    "type":"execute",                    
+                    "note":"Update Yum Cache",            
+                    "path":"/bin/yum -y makecache fast",
+                    "args":""
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Installation of Docker-CE",            
+                    "path":"/bin/yum -y install docker-ce > /tmp/ce-docker-install.log",
+                    "sudoUser":"root"
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Enable Docker on Boot",            
+                    "path":"/usr/bin/systemctl enable docker",
+                    "sudoUser":"root"
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Start Docker to pre-configure system",            
+                    "path":"/usr/bin/systemctl start docker",
+                    "sudoUser":"root"
+                },                
+                {
+                    "type":"execute",                    
+                    "note":"Set Storage Driver to devicemapper",            
+                    "path":"/usr/bin/echo -en '{\n  \"storage-driver\": \"devicemapper\"\n}' > /etc/docker/daemon.json",
+                    "sudoUser":"root"
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Set Swarm firewall rules",            
+                    "path":"/usr/bin/firewall-cmd --add-port=2376/tcp --permanent",
+                    "sudoUser":"root"
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Set Swarm firewall rules",            
+                    "path":"/usr/bin/firewall-cmd --add-port=2377/tcp --permanent",
+                    "sudoUser":"root"
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Set Swarm firewall rules",            
+                    "path":"/usr/bin/firewall-cmd --add-port=7946/tcp --permanent",
+                    "sudoUser":"root"
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Set Swarm firewall rules",            
+                    "path":"/usr/bin/firewall-cmd --add-port=7946/udp --permanent",
+                    "sudoUser":"root"
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Set Swarm firewall rules",            
+                    "path":"/usr/bin/firewall-cmd --add-port=4789/udp --permanent",
+                    "sudoUser":"root"
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Reload firewall rules",            
+                    "path":"/usr/bin/firewall-cmd --reload",
+                    "sudoUser":"root"
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Restart Docker to pick up new storage/network Configuration",            
+                    "path":"/usr/bin/systemctl restart docker",
+                    "sudoUser":"root"
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Download UCP 2.2",            
+                    "path":"/usr/bin/docker pull docker/ucp:2.2.0 >> /tmp/docker-pull.log",
+                    "sudoUser":"root"
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Download DTR 2.2.7",            
+                    "path":"/usr/bin/docker pull docker/dtr:2.2.7 >> /tmp/docker-pull.log",
+                    "sudoUser":"root"
+                },
+                {
+                    "type":"execute",                    
+                    "note":"Re-Enable SELINUX",
+                    "path":"/usr/sbin/setenforce 1",
+                    "sudoUser":"root"
+                }
+                ]
+            }            
+        }
+    ]
+}

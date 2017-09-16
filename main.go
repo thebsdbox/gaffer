@@ -23,13 +23,7 @@ func main() {
 	InitDeployment()
 	vm := VMwareConfig() //Pull VMware configuration from JSON
 
-	vc := cmd.Flags().String("vcurl", os.Getenv("VCURL"), "VMware vCenter URL, format https://user:pass@address/sdk [REQD]")
-	dc := cmd.Flags().String("datacenter", os.Getenv("VCDATACENTER"), "The name of the Datacenter to host the VM [REQD]")
-	ds := cmd.Flags().String("datastore", os.Getenv("VCDATASTORE"), "The name of the DataStore to host the VM [REQD]")
-	nn := cmd.Flags().String("network", os.Getenv("VCNETWORK"), "The network label the VM will use [REQD]")
-	vh := cmd.Flags().String("hostname", os.Getenv("VCHOST"), "The server that will run the VM [REQD]")
-	gu := cmd.Flags().String("templateUser", os.Getenv("VMUSER"), "A created user inside of the VM template")
-	gp := cmd.Flags().String("templatePass", os.Getenv("VMPASS"), "The password for the specified user inside the VM template")
+	var vc, dc, ds, nn, vh, gu, gp *string
 
 	cmd := &cobra.Command{
 		Use:   "dockerVM deployment.json",
@@ -47,45 +41,45 @@ func main() {
 
 			// if configuration isn't set in JSON, check Environment vars/flags
 			if (vm.VCenterURL == nil) || *vm.VCenterURL == "" {
-				if vm.VCenterURL = cmd.Flags().String("vcurl", os.Getenv("VCURL"), "VMware vCenter URL, format https://user:pass@address/sdk [REQD]"); *vm.VCenterURL == "" {
+				if vm.VCenterURL = vc; *vm.VCenterURL == "" {
 					log.Fatalf("VMware vCenter/vSphere credentials are missing")
 				}
 			}
 
 			if (vm.DCName == nil) || *vm.DCName == "" {
-				if vm.DCName = cmd.Flags().String("datacenter", os.Getenv("VCDATACENTER"), "The name of the Datacenter to host the VM [REQD]"); *vm.DCName == "" {
-					log.Printf("No Datacenter was specified, will try to use the default (will cause errors with Linked-Mode)")
+				if vm.DCName = dc; *vm.DCName == "" {
+					log.Warnf("No Datacenter was specified, will try to use the default (will cause errors with Linked-Mode)")
 				}
 			}
 
 			if (vm.DSName == nil) || *vm.DSName == "" {
-				if vm.DSName = cmd.Flags().String("datastore", os.Getenv("VCDATASTORE"), "The name of the DataStore to host the VM [REQD]"); *vm.DSName == "" {
+				if vm.DSName = ds; *vm.DSName == "" {
 					log.Fatalf("A VMware vCenter datastore is required for provisioning")
 				}
 			}
 
 			if (vm.NetworkName == nil) || *vm.NetworkName == "" {
-				if vm.NetworkName = cmd.Flags().String("network", os.Getenv("VCNETWORK"), "The network label the VM will use [REQD]"); *vm.NetworkName == "" {
+				if vm.NetworkName = nn; *vm.NetworkName == "" {
 					log.Fatalf("Specify a Network to connect to")
 				}
 			}
 
 			if (vm.VSphereHost == nil) || *vm.VSphereHost == "" {
-				if vm.VSphereHost = cmd.Flags().String("hostname", os.Getenv("VCHOST"), "The server that will run the VM [REQD]"); *vm.VSphereHost == "" {
+				if vm.VSphereHost = vh; *vm.VSphereHost == "" {
 					log.Fatalf("A Host inside of vCenter/vSphere is required to provision on for VM capacity")
 				}
 			}
 
 			// Ideally these should be populated as they're needed for a lot of the tasks.
 			if (vm.VMTemplateAuth.Username == nil) || *vm.VMTemplateAuth.Username == "" {
-				if vm.VMTemplateAuth.Username = cmd.Flags().String("templateUser", os.Getenv("VMUSER"), "A created user inside of the VM template"); *vm.VMTemplateAuth.Username == "" {
-					log.Printf("No Username for inside of the Guest OS was specified, somethings may fail")
+				if vm.VMTemplateAuth.Username = gu; *vm.VMTemplateAuth.Username == "" {
+					log.Warnf("No Username for inside of the Guest OS was specified, somethings may fail")
 				}
 			}
 
 			if (vm.VMTemplateAuth.Password == nil) || *vm.VMTemplateAuth.Password == "" {
-				if vm.VMTemplateAuth.Password = cmd.Flags().String("templatePass", os.Getenv("VMPASS"), "The password for the specified user inside the VM template"); *vm.VMTemplateAuth.Username == "" {
-					log.Printf("No Password for inside of the Guest OS was specified, somethings may fail")
+				if vm.VMTemplateAuth.Password = gp; *vm.VMTemplateAuth.Username == "" {
+					log.Warnf("No Password for inside of the Guest OS was specified, somethings may fail")
 				}
 			}
 
@@ -106,6 +100,14 @@ func main() {
 			runTasks(ctx, client)
 		},
 	}
+
+	vc = cmd.Flags().String("vcurl", os.Getenv("VCURL"), "VMware vCenter URL, format https://user:pass@address/sdk [REQD]")
+	dc = cmd.Flags().String("datacenter", os.Getenv("VCDATACENTER"), "The name of the Datacenter to host the VM [REQD]")
+	ds = cmd.Flags().String("datastore", os.Getenv("VCDATASTORE"), "The name of the DataStore to host the VM [REQD]")
+	nn = cmd.Flags().String("network", os.Getenv("VCNETWORK"), "The network label the VM will use [REQD]")
+	vh = cmd.Flags().String("hostname", os.Getenv("VCHOST"), "The server that will run the VM [REQD]")
+	gu = cmd.Flags().String("templateUser", os.Getenv("VMUSER"), "A created user inside of the VM template")
+	gp = cmd.Flags().String("templatePass", os.Getenv("VMPASS"), "The password for the specified user inside the VM template")
 
 	log.Println("Starting Docker VMware deployment")
 	err := cmd.Execute()
@@ -182,15 +184,12 @@ func runCommands(ctx context.Context, client *govmomi.Client, vm *object.Virtual
 			case "execute":
 				var err error
 				var pid int64
-				fmt.Printf("%s\n", cmd.CMDkey)
 				if cmd.CMDkey != "" {
-					log.Printf("Executing command from key [%s]", cmd.CMDkey)
+					log.Infof("Executing command from key [%s]", cmd.CMDkey)
 					execKey := cmdResults[cmd.CMDkey]
-					fmt.Printf("%s\n", execKey)
-
-					pid, err = vmExec(ctx, client, vm, auth, execKey, "")
+					pid, err = vmExec(ctx, client, vm, auth, execKey, cmd.CMDUser)
 				} else {
-					pid, err = vmExec(ctx, client, vm, auth, cmd.CMDPath, cmd.CMDArgs)
+					pid, err = vmExec(ctx, client, vm, auth, cmd.CMD, cmd.CMDUser)
 				}
 				if err != nil {
 					log.Fatalf("%v", err)
@@ -202,7 +201,7 @@ func runCommands(ctx context.Context, client *govmomi.Client, vm *object.Virtual
 					}
 				}
 			case "download":
-				err := vmDownloadFile(ctx, client, vm, auth, cmd.CMDPath, cmd.CMDresultKey, cmd.CMDDelete)
+				err := vmDownloadFile(ctx, client, vm, auth, cmd.CMDFilePath, cmd.CMDresultKey, cmd.CMDDelete)
 				if err != nil {
 					fmt.Printf("Error\n")
 					log.Fatalf("%v", err)
@@ -215,16 +214,23 @@ func runCommands(ctx context.Context, client *govmomi.Client, vm *object.Virtual
 	ResetCounter()
 }
 
-func vmExec(ctx context.Context, client *govmomi.Client, vm *object.VirtualMachine, auth *types.NamePasswordAuthentication, path string, args string) (int64, error) {
+func vmExec(ctx context.Context, client *govmomi.Client, vm *object.VirtualMachine, auth *types.NamePasswordAuthentication, command string, user string) (int64, error) {
 	o := guest.NewOperationsManager(client.Client, vm.Reference())
 	pm, _ := o.ProcessManager(ctx)
 
-	newPath := "/bin/sudo"
-	newArgs := fmt.Sprintf("-u root %s %s", path, args)
-	fmt.Printf("%s\n", newArgs)
+	sudoPath := "/bin/sudo" //TODO: This should perhaps be configurable incase some Distro has sudo in a weird place.
+
+	// Add User to the built command
+	var builtPath string
+	if user != "" {
+		builtPath = fmt.Sprintf("-n -u %s %s", user, command)
+	} else {
+		builtPath = fmt.Sprintf("-n %s", command)
+	}
+
 	cmdSpec := types.GuestProgramSpec{
-		ProgramPath: newPath,
-		Arguments:   newArgs,
+		ProgramPath: sudoPath,
+		Arguments:   builtPath,
 	}
 
 	pid, err := pm.StartProgram(ctx, auth, &cmdSpec)
@@ -312,7 +318,7 @@ func watchPid(ctx context.Context, client *govmomi.Client, vm *object.VirtualMac
 	processTimeout := 0
 
 	for {
-		time.Sleep(5 * time.Second)
+		time.Sleep(1 * time.Second)
 		process, err = pm.ListProcesses(ctx, auth, pid)
 
 		if err != nil {
