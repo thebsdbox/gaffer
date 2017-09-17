@@ -87,7 +87,7 @@ func OpenFile(filePath string) error {
 		return fmt.Errorf("Error Parsing JSON: %v", err)
 	}
 
-	log.Printf("Finished parsing [%s], [%d] tasks will be deployment", plan.Label, len(plan.Deployment))
+	log.Printf("Finished parsing [%s], [%d] tasks will be deployed", plan.Label, len(plan.Deployment))
 	return nil
 }
 

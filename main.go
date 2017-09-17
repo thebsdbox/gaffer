@@ -95,8 +95,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("%v", err)
 			}
-			//runCommands
-
+			// Iterate through the deployments and tasks
 			runTasks(ctx, client)
 		},
 	}
@@ -109,12 +108,12 @@ func main() {
 	gu = cmd.Flags().String("templateUser", os.Getenv("VMUSER"), "A created user inside of the VM template")
 	gp = cmd.Flags().String("templatePass", os.Getenv("VMPASS"), "The password for the specified user inside the VM template")
 
-	log.Println("Starting Docker VMware deployment")
+	log.Println("Starting Gaffer")
 	err := cmd.Execute()
 	if err != nil {
 		log.Fatalf("Error parsing the flags")
 	}
-
+	log.Println("Gaffer Completed Succesfully")
 }
 
 func runTasks(ctx context.Context, client *govmomi.Client) {
@@ -147,18 +146,18 @@ func runTasks(ctx context.Context, client *govmomi.Client) {
 					log.Printf("Power Off task failed =>")
 					log.Fatalf("%v", err)
 				}
-				for i := 1; i <= 60; i++ {
+				for i := 1; i <= 120; i++ {
 					state, err := newVM.PowerState(ctx)
 					if err != nil {
 						log.Fatalf("%v", err)
 					}
 					if state != types.VirtualMachinePowerStatePoweredOff {
-						fmt.Printf(".")
+						fmt.Printf("\r\033[36mWaiting for\033[m %d Seconds for VM Shutdown", i)
 					} else {
-						fmt.Printf("\n")
+						fmt.Printf("\r\033[32mShutdown completed in\033[m %d Seconds        \n", i)
 						break
 					}
-					time.Sleep(2 * time.Second)
+					time.Sleep(1 * time.Second)
 				}
 				err = newVM.MarkAsTemplate(ctx)
 				if err != nil {
@@ -308,14 +307,13 @@ func watchPid(ctx context.Context, client *govmomi.Client, vm *object.VirtualMac
 	}
 	if len(process) > 0 {
 		log.Printf("Watching process [%d] cmd [%s]", process[0].Pid, process[0].CmdLine)
-		fmt.Printf(".")
 	} else {
 		log.Fatalf("Process couldn't be found running")
 	}
 
 	// Counter if VMtools loses a previously watched process
 	processTimeout := 0
-
+	var counter int
 	for {
 		time.Sleep(1 * time.Second)
 		process, err = pm.ListProcesses(ctx, auth, pid)
@@ -325,15 +323,15 @@ func watchPid(ctx context.Context, client *govmomi.Client, vm *object.VirtualMac
 		}
 		// Watch Process
 		if process[0].EndTime == nil {
-			fmt.Printf(".")
+			fmt.Printf("\r\033[36mWatching for\033[m %d Seconds", counter)
+			counter++
 		} else {
 			if process[0].ExitCode != 0 {
 				fmt.Printf("\n")
 				log.Println("Return code was not zero, please investigate logs on the Virtual Machine")
 				break
 			} else {
-				fmt.Printf("\n")
-				log.Println("Process completed Successfully")
+				fmt.Printf("\r\033[32mTask completed in\033[m %d Seconds\n", counter)
 				return nil
 			}
 		}
