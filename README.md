@@ -60,7 +60,7 @@ INFO[0108] Watching process [1398] cmd ["/bin/sudo" -n -u root /bin/yum install 
 Task completed in 2 Seconds
 {...}
 INFO[0187] Provisioning tasks have completed, powering down Virtual Machine (120 second Timeout) 
-Shutdown completed in 4 Secondsutdown
+Shutdown completed in 4 Seconds
 INFO[0190] Gaffer Completed Succesfully     
 
 ```
