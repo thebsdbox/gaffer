@@ -26,8 +26,8 @@ func main() {
 	var vc, dc, ds, nn, vh, gu, gp *string
 
 	cmd := &cobra.Command{
-		Use:   "dockerVM deployment.json",
-		Short: "This will take an existing VMware template (RHEL/CentOS (today)), update and prepare it for Docker-CE",
+		Use:   "./gaffer deployment.json",
+		Short: "This tool uses the native VMware APIs to automate Virtual Machines through the guest tools",
 		Run: func(cmd *cobra.Command, args []string) {
 			// Check that the argument (the json file exists)
 			if len(args) == 0 {
